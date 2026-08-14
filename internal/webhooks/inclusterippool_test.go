@@ -800,7 +800,7 @@ func createIP(name string, ip string, pool types.GenericInClusterPool) *ipamv1.I
 	return &ipamv1.IPAddress{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "IPAddress",
-			APIVersion: "ipam.cluster.x-k8s.io/v1beta1",
+			APIVersion: "ipam.cluster.x-k8s.io/v1alpha2",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
