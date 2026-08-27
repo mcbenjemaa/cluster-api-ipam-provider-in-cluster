@@ -134,7 +134,7 @@ type GlobalInClusterPrefixPoolList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(
+	objectTypes = append(objectTypes,
 		&InClusterPrefixPool{},
 		&InClusterPrefixPoolList{},
 		&GlobalInClusterPrefixPool{},
