@@ -285,38 +285,38 @@ func prefixPoolWarnings(spec *v1alpha2.InClusterPrefixPoolSpec) admission.Warnin
 	return append(warnings, warnGatewayCollision)
 }
 
-type inClusterPrefixPoolAdapter struct{ *InClusterPrefixPool }
+type inClusterPrefixPoolAdapter struct{ webhook *InClusterPrefixPool }
 
 func (a *inClusterPrefixPoolAdapter) Default(ctx context.Context, obj *v1alpha2.InClusterPrefixPool) error {
-	return a.InClusterPrefixPool.Default(ctx, obj)
+	return a.webhook.Default(ctx, obj)
 }
 
 func (a *inClusterPrefixPoolAdapter) ValidateCreate(ctx context.Context, obj *v1alpha2.InClusterPrefixPool) (admission.Warnings, error) {
-	return a.InClusterPrefixPool.ValidateCreate(ctx, obj)
+	return a.webhook.ValidateCreate(ctx, obj)
 }
 
 func (a *inClusterPrefixPoolAdapter) ValidateUpdate(ctx context.Context, oldObj, newObj *v1alpha2.InClusterPrefixPool) (admission.Warnings, error) {
-	return a.InClusterPrefixPool.ValidateUpdate(ctx, oldObj, newObj)
+	return a.webhook.ValidateUpdate(ctx, oldObj, newObj)
 }
 
 func (a *inClusterPrefixPoolAdapter) ValidateDelete(ctx context.Context, obj *v1alpha2.InClusterPrefixPool) (admission.Warnings, error) {
-	return a.InClusterPrefixPool.ValidateDelete(ctx, obj)
+	return a.webhook.ValidateDelete(ctx, obj)
 }
 
-type globalInClusterPrefixPoolAdapter struct{ *InClusterPrefixPool }
+type globalInClusterPrefixPoolAdapter struct{ webhook *InClusterPrefixPool }
 
 func (a *globalInClusterPrefixPoolAdapter) Default(ctx context.Context, obj *v1alpha2.GlobalInClusterPrefixPool) error {
-	return a.InClusterPrefixPool.Default(ctx, obj)
+	return a.webhook.Default(ctx, obj)
 }
 
 func (a *globalInClusterPrefixPoolAdapter) ValidateCreate(ctx context.Context, obj *v1alpha2.GlobalInClusterPrefixPool) (admission.Warnings, error) {
-	return a.InClusterPrefixPool.ValidateCreate(ctx, obj)
+	return a.webhook.ValidateCreate(ctx, obj)
 }
 
 func (a *globalInClusterPrefixPoolAdapter) ValidateUpdate(ctx context.Context, oldObj, newObj *v1alpha2.GlobalInClusterPrefixPool) (admission.Warnings, error) {
-	return a.InClusterPrefixPool.ValidateUpdate(ctx, oldObj, newObj)
+	return a.webhook.ValidateUpdate(ctx, oldObj, newObj)
 }
 
 func (a *globalInClusterPrefixPoolAdapter) ValidateDelete(ctx context.Context, obj *v1alpha2.GlobalInClusterPrefixPool) (admission.Warnings, error) {
-	return a.InClusterPrefixPool.ValidateDelete(ctx, obj)
+	return a.webhook.ValidateDelete(ctx, obj)
 }

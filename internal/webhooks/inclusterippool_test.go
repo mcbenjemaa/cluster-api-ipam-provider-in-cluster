@@ -129,8 +129,8 @@ func TestUpdatingPoolInUseAddresses(t *testing.T) {
 		Client: fakeClient,
 	}
 
-	oldNamespacedPool := namespacedPool.DeepCopyObject()
-	oldGlobalPool := globalPool.DeepCopyObject()
+	oldNamespacedPool := namespacedPool.DeepCopyObject().(types.GenericInClusterPool)
+	oldGlobalPool := globalPool.DeepCopyObject().(types.GenericInClusterPool)
 	namespacedPool.Spec.Addresses = []string{"10.0.0.15-10.0.0.20"}
 	globalPool.Spec.Addresses = []string{"10.0.0.15-10.0.0.20"}
 
@@ -372,11 +372,11 @@ func TestInClusterIPPoolDefaulting(t *testing.T) {
 				Build(),
 		}
 
-		t.Run(tt.name, customDefaultValidateTest(ctx, namespacedPool.DeepCopyObject(), &webhook))
+		t.Run(tt.name, customDefaultValidateTest[types.GenericInClusterPool](ctx, namespacedPool.DeepCopyObject().(types.GenericInClusterPool), &webhook))
 		g.Expect(webhook.Default(ctx, namespacedPool)).To(Succeed())
 		g.Expect(namespacedPool.Spec).To(Equal(tt.expect))
 
-		t.Run(tt.name, customDefaultValidateTest(ctx, globalPool.DeepCopyObject(), &webhook))
+		t.Run(tt.name, customDefaultValidateTest[types.GenericInClusterPool](ctx, globalPool.DeepCopyObject().(types.GenericInClusterPool), &webhook))
 		g.Expect(webhook.Default(ctx, globalPool)).To(Succeed())
 		g.Expect(globalPool.Spec).To(Equal(tt.expect))
 	}
@@ -743,7 +743,7 @@ func runInvalidScenarioTests(t *testing.T, tt invalidScenarioTest, pool types.Ge
 			t.Helper()
 
 			g := NewWithT(t)
-			g.Expect(testCreate(t.Context(), pool, &webhook)).
+			g.Expect(testCreate[types.GenericInClusterPool](t.Context(), pool, &webhook)).
 				Error().
 				To(MatchError(ContainSubstring(tt.expectedError)))
 		})
@@ -751,7 +751,7 @@ func runInvalidScenarioTests(t *testing.T, tt invalidScenarioTest, pool types.Ge
 			t.Helper()
 
 			g := NewWithT(t)
-			g.Expect(testUpdate(t.Context(), pool, &webhook)).
+			g.Expect(testUpdate[types.GenericInClusterPool](t.Context(), pool, &webhook)).
 				Error().
 				To(MatchError(ContainSubstring(tt.expectedError)))
 		})
@@ -759,32 +759,32 @@ func runInvalidScenarioTests(t *testing.T, tt invalidScenarioTest, pool types.Ge
 			t.Helper()
 
 			g := NewWithT(t)
-			g.Expect(testDelete(t.Context(), pool, &webhook)).
+			g.Expect(testDelete[types.GenericInClusterPool](t.Context(), pool, &webhook)).
 				Error().
 				To(Succeed())
 		})
 	})
 }
 
-func testCreate(ctx context.Context, obj runtime.Object, webhook customDefaulterValidator) (admission.Warnings, error) {
-	createCopy := obj.DeepCopyObject()
+func testCreate[T client.Object](ctx context.Context, obj runtime.Object, webhook customDefaulterValidator[T]) (admission.Warnings, error) {
+	createCopy := obj.DeepCopyObject().(T)
 	if err := webhook.Default(ctx, createCopy); err != nil {
 		return nil, err
 	}
 	return webhook.ValidateCreate(ctx, createCopy)
 }
 
-func testDelete(ctx context.Context, obj runtime.Object, webhook customDefaulterValidator) (admission.Warnings, error) {
-	deleteCopy := obj.DeepCopyObject()
+func testDelete[T client.Object](ctx context.Context, obj runtime.Object, webhook customDefaulterValidator[T]) (admission.Warnings, error) {
+	deleteCopy := obj.DeepCopyObject().(T)
 	if err := webhook.Default(ctx, deleteCopy); err != nil {
 		return nil, err
 	}
 	return webhook.ValidateDelete(ctx, deleteCopy)
 }
 
-func testUpdate(ctx context.Context, obj runtime.Object, webhook customDefaulterValidator) (admission.Warnings, error) {
-	updateCopy := obj.DeepCopyObject()
-	updatedCopy := obj.DeepCopyObject()
+func testUpdate[T client.Object](ctx context.Context, obj runtime.Object, webhook customDefaulterValidator[T]) (admission.Warnings, error) {
+	updateCopy := obj.DeepCopyObject().(T)
+	updatedCopy := obj.DeepCopyObject().(T)
 	err := webhook.Default(ctx, updateCopy)
 	if err != nil {
 		return nil, err

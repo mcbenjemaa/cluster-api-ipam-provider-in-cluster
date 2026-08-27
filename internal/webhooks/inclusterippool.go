@@ -23,7 +23,6 @@ import (
 
 	"go4.org/netipx"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	ipamv1 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -74,30 +73,17 @@ var (
 )
 
 // Default satisfies the defaulting webhook interface.
-func (webhook *InClusterIPPool) Default(_ context.Context, _ runtime.Object) error {
+func (webhook *InClusterIPPool) Default(_ context.Context, _ types.GenericInClusterPool) error {
 	return nil
 }
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type.
-func (webhook *InClusterIPPool) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
-	pool, ok := obj.(types.GenericInClusterPool)
-	if !ok {
-		return nil, apierrors.NewBadRequest(fmt.Sprintf("expected a InClusterIPPool or an GlobalInClusterIPPool but got a %T", obj))
-	}
+func (webhook *InClusterIPPool) ValidateCreate(_ context.Context, pool types.GenericInClusterPool) (admission.Warnings, error) {
 	return nil, webhook.validate(nil, pool)
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type.
-func (webhook *InClusterIPPool) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	newPool, ok := newObj.(types.GenericInClusterPool)
-	if !ok {
-		return nil, apierrors.NewBadRequest(fmt.Sprintf("expected an InClusterIPPool or a GlobalInClusterIPPool but got a %T", newObj))
-	}
-	oldPool, ok := oldObj.(types.GenericInClusterPool)
-	if !ok {
-		return nil, apierrors.NewBadRequest(fmt.Sprintf("expected an InClusterIPPool or a GlobalInClusterIPPool but got a %T", oldObj))
-	}
-
+func (webhook *InClusterIPPool) ValidateUpdate(ctx context.Context, oldPool, newPool types.GenericInClusterPool) (admission.Warnings, error) {
 	err := webhook.validate(oldPool, newPool)
 	if err != nil {
 		return nil, err
@@ -142,12 +128,7 @@ func (webhook *InClusterIPPool) ValidateUpdate(ctx context.Context, oldObj, newO
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type.
-func (webhook *InClusterIPPool) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	pool, ok := obj.(types.GenericInClusterPool)
-	if !ok {
-		return nil, apierrors.NewBadRequest(fmt.Sprintf("expected an InClusterIPPool or a GlobalInClusterIPPool but got a %T", obj))
-	}
-
+func (webhook *InClusterIPPool) ValidateDelete(ctx context.Context, pool types.GenericInClusterPool) (admission.Warnings, error) {
 	if _, ok := pool.GetAnnotations()[SkipValidateDeleteWebhookAnnotation]; ok {
 		return nil, nil
 	}
@@ -304,38 +285,38 @@ func validateAddressesAreWithinPrefix(spec *v1alpha2.InClusterIPPoolSpec) field.
 	return errors
 }
 
-type inClusterIPPoolAdapter struct{ *InClusterIPPool }
+type inClusterIPPoolAdapter struct{ webhook *InClusterIPPool }
 
 func (a *inClusterIPPoolAdapter) Default(ctx context.Context, obj *v1alpha2.InClusterIPPool) error {
-	return a.InClusterIPPool.Default(ctx, obj)
+	return a.webhook.Default(ctx, obj)
 }
 
 func (a *inClusterIPPoolAdapter) ValidateCreate(ctx context.Context, obj *v1alpha2.InClusterIPPool) (admission.Warnings, error) {
-	return a.InClusterIPPool.ValidateCreate(ctx, obj)
+	return a.webhook.ValidateCreate(ctx, obj)
 }
 
 func (a *inClusterIPPoolAdapter) ValidateUpdate(ctx context.Context, oldObj, newObj *v1alpha2.InClusterIPPool) (admission.Warnings, error) {
-	return a.InClusterIPPool.ValidateUpdate(ctx, oldObj, newObj)
+	return a.webhook.ValidateUpdate(ctx, oldObj, newObj)
 }
 
 func (a *inClusterIPPoolAdapter) ValidateDelete(ctx context.Context, obj *v1alpha2.InClusterIPPool) (admission.Warnings, error) {
-	return a.InClusterIPPool.ValidateDelete(ctx, obj)
+	return a.webhook.ValidateDelete(ctx, obj)
 }
 
-type globalInClusterIPPoolAdapter struct{ *InClusterIPPool }
+type globalInClusterIPPoolAdapter struct{ webhook *InClusterIPPool }
 
 func (a *globalInClusterIPPoolAdapter) Default(ctx context.Context, obj *v1alpha2.GlobalInClusterIPPool) error {
-	return a.InClusterIPPool.Default(ctx, obj)
+	return a.webhook.Default(ctx, obj)
 }
 
 func (a *globalInClusterIPPoolAdapter) ValidateCreate(ctx context.Context, obj *v1alpha2.GlobalInClusterIPPool) (admission.Warnings, error) {
-	return a.InClusterIPPool.ValidateCreate(ctx, obj)
+	return a.webhook.ValidateCreate(ctx, obj)
 }
 
 func (a *globalInClusterIPPoolAdapter) ValidateUpdate(ctx context.Context, oldObj, newObj *v1alpha2.GlobalInClusterIPPool) (admission.Warnings, error) {
-	return a.InClusterIPPool.ValidateUpdate(ctx, oldObj, newObj)
+	return a.webhook.ValidateUpdate(ctx, oldObj, newObj)
 }
 
 func (a *globalInClusterIPPoolAdapter) ValidateDelete(ctx context.Context, obj *v1alpha2.GlobalInClusterIPPool) (admission.Warnings, error) {
-	return a.InClusterIPPool.ValidateDelete(ctx, obj)
+	return a.webhook.ValidateDelete(ctx, obj)
 }
