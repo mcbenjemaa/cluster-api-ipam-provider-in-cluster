@@ -144,7 +144,7 @@ type GlobalInClusterIPPoolList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(
+	objectTypes = append(objectTypes,
 		&InClusterIPPool{},
 		&InClusterIPPoolList{},
 		&GlobalInClusterIPPool{},

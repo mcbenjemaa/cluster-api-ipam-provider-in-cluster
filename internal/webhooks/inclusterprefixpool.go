@@ -28,7 +28,6 @@ import (
 	ipamv1 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"sigs.k8s.io/cluster-api-ipam-provider-in-cluster/api/v1alpha2"
@@ -36,11 +35,11 @@ import (
 	"sigs.k8s.io/cluster-api-ipam-provider-in-cluster/pkg/types"
 )
 
-// +kubebuilder:webhook:verbs=create;update;delete,path=/validate-ipam-cluster-x-k8s-io-v1alpha2-inclusterprefixpool,mutating=false,failurePolicy=fail,matchPolicy=Equivalent,groups=ipam.cluster.x-k8s.io,resources=inclusterprefixpools,versions=v1alpha2,name=validation.inclusterprefixpool.ipam.cluster.x-k8s.io,sideEffects=None,admissionReviewVersions=v1;v1beta1
-// +kubebuilder:webhook:verbs=create;update,path=/mutate-ipam-cluster-x-k8s-io-v1alpha2-inclusterprefixpool,mutating=true,failurePolicy=fail,matchPolicy=Equivalent,groups=ipam.cluster.x-k8s.io,resources=inclusterprefixpools,versions=v1alpha2,name=default.inclusterprefixpool.ipam.cluster.x-k8s.io,sideEffects=None,admissionReviewVersions=v1;v1beta1
+// +kubebuilder:webhook:verbs=create;update;delete,path=/validate-ipam-cluster-x-k8s-io-v1alpha2-inclusterprefixpool,mutating=false,failurePolicy=fail,matchPolicy=Equivalent,groups=ipam.cluster.x-k8s.io,resources=inclusterprefixpools,versions=v1alpha2,name=validation.inclusterprefixpool.ipam.cluster.x-k8s.io,sideEffects=None,admissionReviewVersions=v1
+// +kubebuilder:webhook:verbs=create;update,path=/mutate-ipam-cluster-x-k8s-io-v1alpha2-inclusterprefixpool,mutating=true,failurePolicy=fail,matchPolicy=Equivalent,groups=ipam.cluster.x-k8s.io,resources=inclusterprefixpools,versions=v1alpha2,name=default.inclusterprefixpool.ipam.cluster.x-k8s.io,sideEffects=None,admissionReviewVersions=v1
 
-// +kubebuilder:webhook:verbs=create;update;delete,path=/validate-ipam-cluster-x-k8s-io-v1alpha2-globalinclusterprefixpool,mutating=false,failurePolicy=fail,matchPolicy=Equivalent,groups=ipam.cluster.x-k8s.io,resources=globalinclusterprefixpools,versions=v1alpha2,name=validation.globalinclusterprefixpool.ipam.cluster.x-k8s.io,sideEffects=None,admissionReviewVersions=v1;v1beta1
-// +kubebuilder:webhook:verbs=create;update,path=/mutate-ipam-cluster-x-k8s-io-v1alpha2-globalinclusterprefixpool,mutating=true,failurePolicy=fail,matchPolicy=Equivalent,groups=ipam.cluster.x-k8s.io,resources=globalinclusterprefixpools,versions=v1alpha2,name=default.globalinclusterprefixpool.ipam.cluster.x-k8s.io,sideEffects=None,admissionReviewVersions=v1;v1beta1
+// +kubebuilder:webhook:verbs=create;update;delete,path=/validate-ipam-cluster-x-k8s-io-v1alpha2-globalinclusterprefixpool,mutating=false,failurePolicy=fail,matchPolicy=Equivalent,groups=ipam.cluster.x-k8s.io,resources=globalinclusterprefixpools,versions=v1alpha2,name=validation.globalinclusterprefixpool.ipam.cluster.x-k8s.io,sideEffects=None,admissionReviewVersions=v1
+// +kubebuilder:webhook:verbs=create;update,path=/mutate-ipam-cluster-x-k8s-io-v1alpha2-globalinclusterprefixpool,mutating=true,failurePolicy=fail,matchPolicy=Equivalent,groups=ipam.cluster.x-k8s.io,resources=globalinclusterprefixpools,versions=v1alpha2,name=default.globalinclusterprefixpool.ipam.cluster.x-k8s.io,sideEffects=None,admissionReviewVersions=v1
 
 const (
 	inClusterPrefixPoolKind       = "InClusterPrefixPool"
@@ -53,8 +52,10 @@ const (
 )
 
 var (
-	_ webhook.CustomDefaulter = &InClusterPrefixPool{}
-	_ webhook.CustomValidator = &InClusterPrefixPool{}
+	_ admission.Defaulter[*v1alpha2.InClusterPrefixPool]       = &inClusterPrefixPoolAdapter{}
+	_ admission.Validator[*v1alpha2.InClusterPrefixPool]       = &inClusterPrefixPoolAdapter{}
+	_ admission.Defaulter[*v1alpha2.GlobalInClusterPrefixPool] = &globalInClusterPrefixPoolAdapter{}
+	_ admission.Validator[*v1alpha2.GlobalInClusterPrefixPool] = &globalInClusterPrefixPoolAdapter{}
 )
 
 // InClusterPrefixPool implements a validating and defaulting webhook for InClusterPrefixPool and GlobalInClusterPrefixPool.
@@ -63,18 +64,15 @@ type InClusterPrefixPool struct {
 }
 
 func (webhook *InClusterPrefixPool) SetupWebhookWithManager(mgr ctrl.Manager) error {
-	err := ctrl.NewWebhookManagedBy(mgr).
-		For(&v1alpha2.InClusterPrefixPool{}).
-		WithDefaulter(webhook).
-		WithValidator(webhook).
-		Complete()
-	if err != nil {
+	if err := ctrl.NewWebhookManagedBy(mgr, &v1alpha2.InClusterPrefixPool{}).
+		WithDefaulter(&inClusterPrefixPoolAdapter{webhook}).
+		WithValidator(&inClusterPrefixPoolAdapter{webhook}).
+		Complete(); err != nil {
 		return err
 	}
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(&v1alpha2.GlobalInClusterPrefixPool{}).
-		WithDefaulter(webhook).
-		WithValidator(webhook).
+	return ctrl.NewWebhookManagedBy(mgr, &v1alpha2.GlobalInClusterPrefixPool{}).
+		WithDefaulter(&globalInClusterPrefixPoolAdapter{webhook}).
+		WithValidator(&globalInClusterPrefixPoolAdapter{webhook}).
 		Complete()
 }
 
@@ -285,4 +283,40 @@ func prefixPoolWarnings(spec *v1alpha2.InClusterPrefixPoolSpec) admission.Warnin
 	}
 
 	return append(warnings, warnGatewayCollision)
+}
+
+type inClusterPrefixPoolAdapter struct{ webhook *InClusterPrefixPool }
+
+func (a *inClusterPrefixPoolAdapter) Default(ctx context.Context, obj *v1alpha2.InClusterPrefixPool) error {
+	return a.webhook.Default(ctx, obj)
+}
+
+func (a *inClusterPrefixPoolAdapter) ValidateCreate(ctx context.Context, obj *v1alpha2.InClusterPrefixPool) (admission.Warnings, error) {
+	return a.webhook.ValidateCreate(ctx, obj)
+}
+
+func (a *inClusterPrefixPoolAdapter) ValidateUpdate(ctx context.Context, oldObj, newObj *v1alpha2.InClusterPrefixPool) (admission.Warnings, error) {
+	return a.webhook.ValidateUpdate(ctx, oldObj, newObj)
+}
+
+func (a *inClusterPrefixPoolAdapter) ValidateDelete(ctx context.Context, obj *v1alpha2.InClusterPrefixPool) (admission.Warnings, error) {
+	return a.webhook.ValidateDelete(ctx, obj)
+}
+
+type globalInClusterPrefixPoolAdapter struct{ webhook *InClusterPrefixPool }
+
+func (a *globalInClusterPrefixPoolAdapter) Default(ctx context.Context, obj *v1alpha2.GlobalInClusterPrefixPool) error {
+	return a.webhook.Default(ctx, obj)
+}
+
+func (a *globalInClusterPrefixPoolAdapter) ValidateCreate(ctx context.Context, obj *v1alpha2.GlobalInClusterPrefixPool) (admission.Warnings, error) {
+	return a.webhook.ValidateCreate(ctx, obj)
+}
+
+func (a *globalInClusterPrefixPoolAdapter) ValidateUpdate(ctx context.Context, oldObj, newObj *v1alpha2.GlobalInClusterPrefixPool) (admission.Warnings, error) {
+	return a.webhook.ValidateUpdate(ctx, oldObj, newObj)
+}
+
+func (a *globalInClusterPrefixPoolAdapter) ValidateDelete(ctx context.Context, obj *v1alpha2.GlobalInClusterPrefixPool) (admission.Warnings, error) {
+	return a.webhook.ValidateDelete(ctx, obj)
 }

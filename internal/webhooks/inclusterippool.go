@@ -23,12 +23,10 @@ import (
 
 	"go4.org/netipx"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	ipamv1 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"sigs.k8s.io/cluster-api-ipam-provider-in-cluster/api/v1alpha2"
@@ -44,26 +42,23 @@ const (
 )
 
 func (webhook *InClusterIPPool) SetupWebhookWithManager(mgr ctrl.Manager) error {
-	err := ctrl.NewWebhookManagedBy(mgr).
-		For(&v1alpha2.InClusterIPPool{}).
-		WithDefaulter(webhook).
-		WithValidator(webhook).
-		Complete()
-	if err != nil {
+	if err := ctrl.NewWebhookManagedBy(mgr, &v1alpha2.InClusterIPPool{}).
+		WithDefaulter(&inClusterIPPoolAdapter{webhook}).
+		WithValidator(&inClusterIPPoolAdapter{webhook}).
+		Complete(); err != nil {
 		return err
 	}
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(&v1alpha2.GlobalInClusterIPPool{}).
-		WithDefaulter(webhook).
-		WithValidator(webhook).
+	return ctrl.NewWebhookManagedBy(mgr, &v1alpha2.GlobalInClusterIPPool{}).
+		WithDefaulter(&globalInClusterIPPoolAdapter{webhook}).
+		WithValidator(&globalInClusterIPPoolAdapter{webhook}).
 		Complete()
 }
 
-// +kubebuilder:webhook:verbs=create;update;delete,path=/validate-ipam-cluster-x-k8s-io-v1alpha2-inclusterippool,mutating=false,failurePolicy=fail,matchPolicy=Equivalent,groups=ipam.cluster.x-k8s.io,resources=inclusterippools,versions=v1alpha2,name=validation.inclusterippool.ipam.cluster.x-k8s.io,sideEffects=None,admissionReviewVersions=v1;v1beta1
-// +kubebuilder:webhook:verbs=create;update,path=/mutate-ipam-cluster-x-k8s-io-v1alpha2-inclusterippool,mutating=true,failurePolicy=fail,matchPolicy=Equivalent,groups=ipam.cluster.x-k8s.io,resources=inclusterippools,versions=v1alpha2,name=default.inclusterippool.ipam.cluster.x-k8s.io,sideEffects=None,admissionReviewVersions=v1;v1beta1
+// +kubebuilder:webhook:verbs=create;update;delete,path=/validate-ipam-cluster-x-k8s-io-v1alpha2-inclusterippool,mutating=false,failurePolicy=fail,matchPolicy=Equivalent,groups=ipam.cluster.x-k8s.io,resources=inclusterippools,versions=v1alpha2,name=validation.inclusterippool.ipam.cluster.x-k8s.io,sideEffects=None,admissionReviewVersions=v1
+// +kubebuilder:webhook:verbs=create;update,path=/mutate-ipam-cluster-x-k8s-io-v1alpha2-inclusterippool,mutating=true,failurePolicy=fail,matchPolicy=Equivalent,groups=ipam.cluster.x-k8s.io,resources=inclusterippools,versions=v1alpha2,name=default.inclusterippool.ipam.cluster.x-k8s.io,sideEffects=None,admissionReviewVersions=v1
 
-// +kubebuilder:webhook:verbs=create;update;delete,path=/validate-ipam-cluster-x-k8s-io-v1alpha2-globalinclusterippool,mutating=false,failurePolicy=fail,matchPolicy=Equivalent,groups=ipam.cluster.x-k8s.io,resources=globalinclusterippools,versions=v1alpha2,name=validation.globalinclusterippool.ipam.cluster.x-k8s.io,sideEffects=None,admissionReviewVersions=v1;v1beta1
-// +kubebuilder:webhook:verbs=create;update,path=/mutate-ipam-cluster-x-k8s-io-v1alpha2-globalinclusterippool,mutating=true,failurePolicy=fail,matchPolicy=Equivalent,groups=ipam.cluster.x-k8s.io,resources=globalinclusterippools,versions=v1alpha2,name=default.globalinclusterippool.ipam.cluster.x-k8s.io,sideEffects=None,admissionReviewVersions=v1;v1beta1
+// +kubebuilder:webhook:verbs=create;update;delete,path=/validate-ipam-cluster-x-k8s-io-v1alpha2-globalinclusterippool,mutating=false,failurePolicy=fail,matchPolicy=Equivalent,groups=ipam.cluster.x-k8s.io,resources=globalinclusterippools,versions=v1alpha2,name=validation.globalinclusterippool.ipam.cluster.x-k8s.io,sideEffects=None,admissionReviewVersions=v1
+// +kubebuilder:webhook:verbs=create;update,path=/mutate-ipam-cluster-x-k8s-io-v1alpha2-globalinclusterippool,mutating=true,failurePolicy=fail,matchPolicy=Equivalent,groups=ipam.cluster.x-k8s.io,resources=globalinclusterippools,versions=v1alpha2,name=default.globalinclusterippool.ipam.cluster.x-k8s.io,sideEffects=None,admissionReviewVersions=v1
 
 // InClusterIPPool implements a validating and defaulting webhook for InClusterIPPool and GlobalInClusterIPPool.
 type InClusterIPPool struct {
@@ -71,35 +66,24 @@ type InClusterIPPool struct {
 }
 
 var (
-	_ webhook.CustomDefaulter = &InClusterIPPool{}
-	_ webhook.CustomValidator = &InClusterIPPool{}
+	_ admission.Defaulter[*v1alpha2.InClusterIPPool]       = &inClusterIPPoolAdapter{}
+	_ admission.Validator[*v1alpha2.InClusterIPPool]       = &inClusterIPPoolAdapter{}
+	_ admission.Defaulter[*v1alpha2.GlobalInClusterIPPool] = &globalInClusterIPPoolAdapter{}
+	_ admission.Validator[*v1alpha2.GlobalInClusterIPPool] = &globalInClusterIPPoolAdapter{}
 )
 
 // Default satisfies the defaulting webhook interface.
-func (webhook *InClusterIPPool) Default(_ context.Context, _ runtime.Object) error {
+func (webhook *InClusterIPPool) Default(_ context.Context, _ types.GenericInClusterPool) error {
 	return nil
 }
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type.
-func (webhook *InClusterIPPool) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
-	pool, ok := obj.(types.GenericInClusterPool)
-	if !ok {
-		return nil, apierrors.NewBadRequest(fmt.Sprintf("expected a InClusterIPPool or an GlobalInClusterIPPool but got a %T", obj))
-	}
+func (webhook *InClusterIPPool) ValidateCreate(_ context.Context, pool types.GenericInClusterPool) (admission.Warnings, error) {
 	return nil, webhook.validate(nil, pool)
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type.
-func (webhook *InClusterIPPool) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	newPool, ok := newObj.(types.GenericInClusterPool)
-	if !ok {
-		return nil, apierrors.NewBadRequest(fmt.Sprintf("expected an InClusterIPPool or a GlobalInClusterIPPool but got a %T", newObj))
-	}
-	oldPool, ok := oldObj.(types.GenericInClusterPool)
-	if !ok {
-		return nil, apierrors.NewBadRequest(fmt.Sprintf("expected an InClusterIPPool or a GlobalInClusterIPPool but got a %T", oldObj))
-	}
-
+func (webhook *InClusterIPPool) ValidateUpdate(ctx context.Context, oldPool, newPool types.GenericInClusterPool) (admission.Warnings, error) {
 	err := webhook.validate(oldPool, newPool)
 	if err != nil {
 		return nil, err
@@ -144,12 +128,7 @@ func (webhook *InClusterIPPool) ValidateUpdate(ctx context.Context, oldObj, newO
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type.
-func (webhook *InClusterIPPool) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	pool, ok := obj.(types.GenericInClusterPool)
-	if !ok {
-		return nil, apierrors.NewBadRequest(fmt.Sprintf("expected an InClusterIPPool or a GlobalInClusterIPPool but got a %T", obj))
-	}
-
+func (webhook *InClusterIPPool) ValidateDelete(ctx context.Context, pool types.GenericInClusterPool) (admission.Warnings, error) {
 	if _, ok := pool.GetAnnotations()[SkipValidateDeleteWebhookAnnotation]; ok {
 		return nil, nil
 	}
@@ -304,4 +283,40 @@ func validateAddressesAreWithinPrefix(spec *v1alpha2.InClusterIPPoolSpec) field.
 	}
 
 	return errors
+}
+
+type inClusterIPPoolAdapter struct{ webhook *InClusterIPPool }
+
+func (a *inClusterIPPoolAdapter) Default(ctx context.Context, obj *v1alpha2.InClusterIPPool) error {
+	return a.webhook.Default(ctx, obj)
+}
+
+func (a *inClusterIPPoolAdapter) ValidateCreate(ctx context.Context, obj *v1alpha2.InClusterIPPool) (admission.Warnings, error) {
+	return a.webhook.ValidateCreate(ctx, obj)
+}
+
+func (a *inClusterIPPoolAdapter) ValidateUpdate(ctx context.Context, oldObj, newObj *v1alpha2.InClusterIPPool) (admission.Warnings, error) {
+	return a.webhook.ValidateUpdate(ctx, oldObj, newObj)
+}
+
+func (a *inClusterIPPoolAdapter) ValidateDelete(ctx context.Context, obj *v1alpha2.InClusterIPPool) (admission.Warnings, error) {
+	return a.webhook.ValidateDelete(ctx, obj)
+}
+
+type globalInClusterIPPoolAdapter struct{ webhook *InClusterIPPool }
+
+func (a *globalInClusterIPPoolAdapter) Default(ctx context.Context, obj *v1alpha2.GlobalInClusterIPPool) error {
+	return a.webhook.Default(ctx, obj)
+}
+
+func (a *globalInClusterIPPoolAdapter) ValidateCreate(ctx context.Context, obj *v1alpha2.GlobalInClusterIPPool) (admission.Warnings, error) {
+	return a.webhook.ValidateCreate(ctx, obj)
+}
+
+func (a *globalInClusterIPPoolAdapter) ValidateUpdate(ctx context.Context, oldObj, newObj *v1alpha2.GlobalInClusterIPPool) (admission.Warnings, error) {
+	return a.webhook.ValidateUpdate(ctx, oldObj, newObj)
+}
+
+func (a *globalInClusterIPPoolAdapter) ValidateDelete(ctx context.Context, obj *v1alpha2.GlobalInClusterIPPool) (admission.Warnings, error) {
+	return a.webhook.ValidateDelete(ctx, obj)
 }
